@@ -48,7 +48,7 @@ module APNS
   def self.establish_notification_connection
     if @cache_connections
       begin
-        self.get_connection(self.host, self.port)
+        get_connection(host, port)
         return true
       rescue
       end
@@ -57,20 +57,20 @@ module APNS
   end
 
   def self.has_notification_connection?
-    return self.has_connection?(self.host, self.port)
+    return has_connection?(host, port)
   end
 
   def self.send_notification(device_token, message)
-    self.with_notification_connection do |conn|
-      conn.write(self.packaged_notification(device_token, message))
+    with_notification_connection do |conn|
+      conn.write(packaged_notification(device_token, message))
       conn.flush
     end
   end
   
   def self.send_notifications(notifications)
-    self.with_notification_connection do |conn|
+    with_notification_connection do |conn|
       notifications.each do |n|
-        conn.write(self.packaged_notification(n[0], n[1]))
+        conn.write(packaged_notification(n[0], n[1]))
       end
       conn.flush
     end
@@ -78,11 +78,11 @@ module APNS
   
   def self.feedback
     apns_feedback = []
-    self.with_feedback_connection do |conn|
+    with_feedback_connection do |conn|
       # Read buffers data from the OS, so it's probably not
       # too inefficient to do the small reads
       while data = conn.read(38)
-        apns_feedback << self.parse_feedback_tuple(data)
+        apns_feedback << parse_feedback_tuple(data)
       end
     end
     
@@ -106,8 +106,8 @@ module APNS
   end
 
   def self.packaged_notification(device_token, message)
-    pt = self.packaged_token(device_token)
-    pm = self.packaged_message(message)
+    pt = packaged_token(device_token)
+    pm = packaged_message(message)
     [0, 0, 32, pt, 0, pm.size, pm].pack("ccca*cca*")
   end
   
@@ -126,7 +126,7 @@ module APNS
   end
   
   def self.with_notification_connection(&block)
-    self.with_connection(self.host, self.port, &block)
+    with_connection(host, port, &block)
   end
 
   def self.with_feedback_connection(&block)
@@ -134,7 +134,7 @@ module APNS
     cache_temp = @cache_connections
     @cache_connections = false
 
-    self.with_connection(self.feedback_host, self.feedback_port, &block)
+    with_connection(feedback_host, feedback_port, &block)
 
   ensure
     @cache_connections = cache_temp
@@ -174,7 +174,7 @@ module APNS
   end
 
   def self.create_connection(host, port)
-    @connections[[host, port]] = self.open_connection(host, port)
+    @connections[[host, port]] = open_connection(host, port)
   end
 
   def self.find_connection(host, port)
@@ -182,7 +182,7 @@ module APNS
   end
 
   def self.remove_connection(host, port)
-    if self.has_connection?(host, port)
+    if has_connection?(host, port)
       ssl, sock = @connections.delete([host, port])
       ssl.close
       sock.close
@@ -190,34 +190,34 @@ module APNS
   end
 
   def self.reconnect_connection(host, port)
-    self.remove_connection(host, port)
-    self.create_connection(host, port)
+    remove_connection(host, port)
+    create_connection(host, port)
   end
 
   def self.get_connection(host, port)
     if @cache_connections
       # Create a new connection if we don't have one
-      unless self.has_connection?(host, port)
-        self.create_connection(host, port)
+      unless has_connection?(host, port)
+        create_connection(host, port)
       end
 
-      ssl, sock = self.find_connection(host, port)
+      ssl, sock = find_connection(host, port)
       # If we're closed, reconnect
       if ssl.closed?
-        self.reconnect_connection(host, port)
-        self.find_connection(host, port)
+        reconnect_connection(host, port)
+        find_connection(host, port)
       else
         return [ssl, sock]
       end
     else
-      self.open_connection(host, port)
+      open_connection(host, port)
     end
   end
 
   def self.with_connection(host, port, &block)
     retries = 0
     begin
-      ssl, sock = self.get_connection(host, port)
+      ssl, sock = get_connection(host, port)
       yield ssl if block_given?
 
       unless @cache_connections
@@ -226,7 +226,7 @@ module APNS
       end
     rescue Errno::ECONNABORTED, Errno::EPIPE, Errno::ECONNRESET
       if (retries += 1) < 5
-        self.remove_connection(host, port)
+        remove_connection(host, port)
         retry
       else
         # too-many retries, re-raise
