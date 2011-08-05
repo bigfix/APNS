@@ -38,15 +38,11 @@ module APNS
   @feedback_host = 'feedback.sandbox.push.apple.com'
   @feedback_port = 2196
 
-  # openssl pkcs12 -in mycert.p12 -out client-cert.pem -nodes -clcerts
-  @pem = nil # this should be the path of the pem file not the contentes
-  @pass = nil
-
   @cache_connections = false
   @connections = {}
 
   class << self
-    attr_accessor :host, :port, :feedback_host, :feedback_port, :pem, :pass, :cache_connections
+    attr_accessor :host, :port, :feedback_host, :feedback_port, :pem, :pass, :cache_connections, :cert
   end
 
   def self.establish_notification_connection
@@ -147,12 +143,14 @@ module APNS
   private
 
   def self.open_connection(host, port)
-    raise "The path to your pem file is not set. (APNS.pem = /path/to/cert.pem)" unless self.pem
-    raise "The path to your pem file does not exist!" unless File.exist?(self.pem)
+    raise "The path to your pem file is not set. (APNS.pem = /path/to/cert.pem)" unless pem
+    self.cert ||= pem
+    raise "Your pem file (#{pem}) does not exist!" unless File.exist?(pem)
+    raise "Your cert file (#{cert}) does not exist!" unless File.exist?(cert)
     
     context      = OpenSSL::SSL::SSLContext.new
-    context.cert = OpenSSL::X509::Certificate.new(File.read(self.pem))
-    context.key  = OpenSSL::PKey::RSA.new(File.read(self.pem), self.pass)
+    context.cert = OpenSSL::X509::Certificate.new(File.read(cert))
+    context.key  = OpenSSL::PKey::RSA.new(File.read(pem), pass)
 
     retries = 0
     begin
