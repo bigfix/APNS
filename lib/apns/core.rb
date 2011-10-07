@@ -68,11 +68,21 @@ module APNS
   end
   
   def self.send_notifications(notifications)
-    with_notification_connection do |conn|
-      notifications.each do |n|
-        conn.write(packaged_notification(n[0], n[1]))
+    self.with_notification_connection do |conn|
+      completed = []
+      notifications.collect do |n|
+        id = rand(10**9)
+        conn.write(self.packaged_notification(n[0], n[1], id))
+        completed << [ id, n ]
       end
       conn.flush
+      if IO.select([ conn ], nil, nil, 5)
+        conn.read(1).unpack('c') and conn.read(1).unpack('c')
+        id = conn.read(4).unpack('L')[0]
+        error_index = completed.index { |c| c[0] == id }
+        completed = completed[error_index+1..-1].collect { |c| c[1] }
+        send_notifications(completed)
+      end
     end
   end
   
@@ -105,9 +115,14 @@ module APNS
     {:feedback_at => Time.at(feedback[0]), :length => feedback[1], :device_token => feedback[2] }
   end
 
-  def self.packaged_notification(device_token, message)
-    pm = packaged_message(message)
-    [0, 0, 32, device_token, 0, pm.size, pm].pack("ccca*cca*")
+  def self.packaged_notification(device_token, message, id=rand(10**9))
+    pt = self.packaged_token(device_token)
+    pm = self.packaged_message(message)
+    [1, id, 0, 0, 32, pt, 0, pm.size, pm].pack("cLNcca*cca*")
+  end
+  
+  def self.packaged_token(device_token)
+    [device_token.gsub(/[\s|<|>]/,'')].pack('H*')
   end
   
   def self.packaged_message(message)
